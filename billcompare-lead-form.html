@@ -397,7 +397,7 @@ function validate(){
   ok &= markField($("#phone1"),    ukPhone($("#phone1").value));
   ok &= markField($("#street1"),   $("#street1").value.trim().length>0);
   ok &= markField($("#towncity"),  $("#towncity").value.trim().length>0);
-  ok &= markField($("#postcode"),  ukPostcode($("#postcode").value.trim()));
+  ok &= markField($("#postcode"),  ukPostcode.test($("#postcode").value.trim()));
   ok &= markField($("#current_supplier"), $("#current_supplier").value!=="");
   ok &= markField($("#payment_method"),   $("#payment_method").value!=="");
   if($("#current_supplier").value==="Other")
