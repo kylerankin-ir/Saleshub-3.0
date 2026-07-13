@@ -311,6 +311,14 @@
   </div>
 
 <script>
+// Surface any script error on screen so problems are visible, not silent.
+window.addEventListener("error", function(ev){
+  try{
+    var w = document.getElementById("configWarn");
+    if(w){ w.textContent = "Script error: " + (ev.message||"") +
+      (ev.filename ? "  ["+ev.filename.split("/").pop()+":"+ev.lineno+"]" : ""); w.classList.add("show"); }
+  }catch(e){}
+});
 /* ============================================================
    CONFIG  —  set these before go-live
    ============================================================ */
@@ -536,6 +544,7 @@ function submitViaIframe(params){
 
 $("#leadForm").addEventListener("submit", async e=>{
   e.preventDefault();
+  try{
   if(!getRep()){ showResult("err","This link isn't set up for you","It's missing your agent code, so leads can't be submitted. Ask your team leader for your own BillCompare link."); return; }
   if(!validate()){ showResult("err","Some fields need attention","Check the highlighted fields and try again."); return; }
 
@@ -569,6 +578,10 @@ $("#leadForm").addEventListener("submit", async e=>{
       "Something went wrong sending this lead. Check your internet connection and try again. Technical detail: "+err.message);
   }finally{
     btn.disabled = false; btn.classList.remove("sending");
+  }
+  }catch(fatal){
+    showResult("err","Something went wrong","The form hit an error before it could send. Detail: "+((fatal&&fatal.message)||fatal));
+    const b=$("#submitBtn"); if(b){ b.disabled=false; b.classList.remove("sending"); }
   }
 });
 
