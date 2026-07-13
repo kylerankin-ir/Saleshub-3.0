@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BillCompare — Link Generator</title>
+<style>
+  :root{
+    --ink:#16241f; --ink-soft:#52615b; --line:#dfe5e1; --bg:#f3f6f3; --card:#fff;
+    --brand:#0f7a4d; --brand-dark:#0a5c3a; --brand-tint:#e7f3ec;
+    --err:#b5261e; --err-tint:#fbe7e6; --focus:#1565ff;
+    --radius:10px; --shadow:0 1px 2px rgba(16,40,30,.06),0 8px 24px rgba(16,40,30,.06);
+  }
+  *{box-sizing:border-box}
+  body{margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+       color:var(--ink); background:var(--bg); font-size:16px; line-height:1.45; -webkit-font-smoothing:antialiased}
+
+  .topbar{position:sticky; top:0; z-index:10; background:rgba(255,255,255,.92);
+          backdrop-filter:saturate(1.4) blur(8px); color:var(--ink);
+          border-bottom:1px solid var(--line); padding:12px 24px;
+          display:flex; align-items:center; gap:12px}
+  .brand-logo{height:28px; width:auto; display:block}
+  .brand-word{font-weight:700; font-size:18px; color:var(--brand-dark); letter-spacing:-.2px}
+  .topbar .tag{font-size:11px; letter-spacing:.6px; text-transform:uppercase; color:var(--ink-soft); border-left:1px solid var(--line); padding-left:12px}
+
+  .wrap{max-width:900px; margin:0 auto; padding:22px 20px 70px}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); margin-bottom:18px}
+  .card h2{font-size:13px; letter-spacing:.7px; text-transform:uppercase; color:var(--ink-soft); margin:0; padding:16px 20px 0}
+  .card .body{padding:16px 20px 20px}
+
+  label{display:block; font-size:13px; font-weight:600; margin-bottom:4px}
+  label .hint{font-weight:400; color:var(--ink-soft)}
+  input,textarea,select{width:100%; font:inherit; color:var(--ink); padding:10px 12px;
+        border:1.5px solid var(--line); border-radius:8px; background:#fff}
+  input:focus,textarea:focus,select:focus{outline:3px solid color-mix(in srgb,var(--focus) 35%,transparent); border-color:var(--focus)}
+  textarea{min-height:150px; resize:vertical; font-family:inherit}
+  .row{display:grid; grid-template-columns:1fr 1fr; gap:12px 14px}
+  .row .full{grid-column:1 / -1}
+  @media (max-width:600px){ .row{grid-template-columns:1fr} .row .full{grid-column:auto} }
+  .field{margin-bottom:12px}
+  .field:last-child{margin-bottom:0}
+
+  .btn{font:inherit; font-weight:600; border-radius:8px; cursor:pointer; border:1.5px solid transparent; padding:10px 18px}
+  .btn-primary{background:var(--brand); color:#fff}
+  .btn-primary:hover{background:var(--brand-dark)}
+  .btn-ghost{background:#fff; border-color:var(--line); color:var(--ink-soft)}
+  .btn-ghost:hover{border-color:var(--ink-soft)}
+  .btn-sm{padding:6px 12px; font-size:13px}
+
+  /* tabs */
+  .tabs{display:flex; gap:6px; padding:14px 20px 0}
+  .tab{border:0; background:none; font:inherit; font-weight:600; color:var(--ink-soft);
+       padding:10px 14px; border-radius:8px 8px 0 0; cursor:pointer; border-bottom:3px solid transparent}
+  .tab.active{color:var(--brand-dark); border-bottom-color:var(--brand)}
+
+  /* single output */
+  .out{margin-top:14px; background:var(--brand-tint); border:1.5px solid #b4ddc6; border-radius:10px; padding:14px}
+  .out .url{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:13px; word-break:break-all; color:var(--brand-dark); margin-bottom:10px}
+  .out .actions{display:flex; gap:8px; flex-wrap:wrap}
+  .out.empty{background:#fafbfa; border:1.5px dashed var(--line); color:var(--ink-soft); font-size:14px}
+
+  /* advanced disclosure */
+  details{margin-top:12px; border-top:1px solid var(--line); padding-top:12px}
+  summary{cursor:pointer; font-size:13px; font-weight:600; color:var(--brand-dark)}
+  details[open] .row{margin-top:12px}
+
+  /* bulk table */
+  .bulk-actions{display:flex; gap:8px; flex-wrap:wrap; margin:14px 0}
+  table{width:100%; border-collapse:collapse; font-size:13.5px}
+  th,td{text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top}
+  th{font-size:11px; letter-spacing:.5px; text-transform:uppercase; color:var(--ink-soft)}
+  td.url{font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; word-break:break-all; color:var(--brand-dark)}
+  td.act{white-space:nowrap; text-align:right}
+  .count{font-size:13px; color:var(--ink-soft); margin-left:auto; align-self:center}
+
+  .warn{display:none; background:var(--err-tint); border:1.5px solid #f0bdb9; color:var(--err);
+        border-radius:8px; padding:10px 12px; font-size:13.5px; margin-top:12px}
+  .warn.show{display:block}
+
+  /* toast */
+  #toast{position:fixed; bottom:22px; left:50%; transform:translateX(-50%) translateY(20px);
+         background:var(--ink); color:#fff; padding:10px 18px; border-radius:999px; font-size:14px;
+         opacity:0; pointer-events:none; transition:.2s}
+  #toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <img class="brand-logo" src="https://www.billcompare.co.uk/assets/img/logo.png" alt="BillCompare" onerror="this.outerHTML='<span class=&quot;brand-word&quot;>BillCompare</span>'">
+    <span class="tag">Link generator</span>
+  </div>
+
+  <div class="wrap">
+
+    <!-- base URL -->
+    <div class="card">
+      <h2>Form location</h2>
+      <div class="body">
+        <div class="field">
+          <label for="baseUrl">Where the lead form is hosted <span class="hint">— set once, it's remembered on this device</span></label>
+          <input id="baseUrl" placeholder="https://forms.yourdomain.co.uk/billcompare-lead-form.html" autocomplete="off">
+        </div>
+        <div class="warn" id="baseWarn">Enter the hosted form URL above before generating links.</div>
+      </div>
+    </div>
+
+    <!-- generator -->
+    <div class="card">
+      <div class="tabs">
+        <button class="tab active" data-tab="single" type="button">Single link</button>
+        <button class="tab" data-tab="bulk" type="button">Bulk (whole team)</button>
+      </div>
+      <div class="body">
+
+        <!-- shared team fields -->
+        <div class="row">
+          <div class="field">
+            <label for="company">Company / team</label>
+            <input id="company" list="companyList" placeholder="e.g. LikeMinds" autocomplete="off">
+            <datalist id="companyList">
+              <option>Like Minds</option><option>Judah</option><option>BCC</option>
+              <option>Perspective</option><option>KEL</option><option>People First BPO</option>
+              <option>Amalfi</option>
+            </datalist>
+          </div>
+          <div class="field" id="singleRepField">
+            <label for="rep">Agent name <span class="hint">— becomes repname</span></label>
+            <input id="rep" placeholder="e.g. Jane Smith" autocomplete="off">
+          </div>
+        </div>
+
+        <details id="advanced">
+          <summary>Advanced — extra values for this team (optional)</summary>
+          <div class="row">
+            <div class="field"><label for="sh_id">sh_id</label><input id="sh_id" autocomplete="off"></div>
+            <div class="field"><label for="sh_campaign">sh_campaign</label><input id="sh_campaign" autocomplete="off"></div>
+            <div class="field full"><label for="manager">Manager <span class="hint">— becomes manager</span></label><input id="manager" autocomplete="off"></div>
+          </div>
+        </details>
+
+        <!-- SINGLE output -->
+        <div id="singlePane">
+          <div class="out empty" id="singleOut">Fill in the agent name to generate a link.</div>
+        </div>
+
+        <!-- BULK pane -->
+        <div id="bulkPane" style="display:none">
+          <div class="field" style="margin-top:14px">
+            <label for="names">Agent names <span class="hint">— one per line, whole team at once</span></label>
+            <textarea id="names" placeholder="Jane Smith&#10;Ahmed Khan&#10;Maria Botha"></textarea>
+          </div>
+          <div class="bulk-actions">
+            <button class="btn btn-primary" id="genBulk" type="button">Generate links</button>
+            <button class="btn btn-ghost btn-sm" id="copyAll" type="button" style="display:none">Copy all URLs</button>
+            <button class="btn btn-ghost btn-sm" id="downloadCsv" type="button" style="display:none">Download CSV</button>
+            <span class="count" id="bulkCount"></span>
+          </div>
+          <div id="bulkTableWrap"></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const LS_BASE = "bcgen_base";
+
+/* ---- persist base URL ---- */
+$("#baseUrl").value = localStorage.getItem(LS_BASE) || "";
+$("#baseUrl").addEventListener("input", ()=>{
+  localStorage.setItem(LS_BASE, $("#baseUrl").value.trim());
+  $("#baseWarn").classList.remove("show");
+  renderSingle();
+});
+
+/* ---- helpers ---- */
+function baseUrl(){ return $("#baseUrl").value.trim(); }
+function sharedParams(){
+  // team-level params common to single + bulk (excludes repname)
+  const p = {};
+  const add = (k,v)=>{ v=(v||"").trim(); if(v) p[k]=v; };
+  add("companyname", $("#company").value);
+  add("sh_id",       $("#sh_id").value);
+  add("sh_campaign", $("#sh_campaign").value);
+  add("manager",     $("#manager").value);
+  return p;
+}
+function buildLink(rep, extra){
+  const params = Object.assign({}, sharedParams(), extra || {});
+  if(rep && rep.trim()) params.repname = rep.trim();
+  const qs = Object.entries(params)
+    .map(([k,v]) => encodeURIComponent(k) + "=" + encodeURIComponent(v))
+    .join("&");
+  return baseUrl() + (qs ? "?" + qs : "");
+}
+function toast(msg){
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(()=>t.classList.remove("show"), 1600);
+}
+async function copy(text){
+  try{ await navigator.clipboard.writeText(text); toast("Copied"); }
+  catch{
+    const ta=document.createElement("textarea"); ta.value=text; document.body.appendChild(ta);
+    ta.select(); try{ document.execCommand("copy"); toast("Copied"); }catch{ toast("Copy failed — select manually"); }
+    ta.remove();
+  }
+}
+function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+function needBase(){ if(!baseUrl()){ $("#baseWarn").classList.add("show"); $("#baseUrl").focus(); return true; } return false; }
+
+/* ---- tabs ---- */
+document.querySelectorAll(".tab").forEach(tab=>{
+  tab.addEventListener("click", ()=>{
+    document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
+    tab.classList.add("active");
+    const bulk = tab.dataset.tab==="bulk";
+    $("#bulkPane").style.display = bulk ? "" : "none";
+    $("#singlePane").style.display = bulk ? "none" : "";
+    $("#singleRepField").style.display = bulk ? "none" : "";
+  });
+});
+
+/* ---- SINGLE ---- */
+function renderSingle(){
+  const rep = $("#rep").value.trim();
+  const out = $("#singleOut");
+  if(!rep){ out.className="out empty"; out.textContent="Fill in the agent name to generate a link."; return; }
+  if(!baseUrl()){ out.className="out empty"; out.textContent="Set the hosted form URL at the top first."; return; }
+  const url = buildLink(rep);
+  out.className = "out";
+  out.innerHTML = '<div class="url">'+esc(url)+'</div><div class="actions">'
+    + '<button class="btn btn-primary btn-sm" id="copySingle" type="button">Copy link</button>'
+    + '<a class="btn btn-ghost btn-sm" href="'+esc(url)+'" target="_blank" rel="noopener">Open</a></div>';
+  $("#copySingle").addEventListener("click", ()=>copy(url));
+}
+["rep","company","sh_id","sh_campaign","manager"].forEach(id=>$("#"+id).addEventListener("input", renderSingle));
+
+/* ---- BULK ---- */
+let bulkRows = [];
+$("#genBulk").addEventListener("click", ()=>{
+  if(needBase()) return;
+  const names = $("#names").value.split("\n").map(s=>s.trim()).filter(Boolean);
+  // de-duplicate, preserve order
+  const seen = new Set(); const unique = [];
+  names.forEach(n=>{ const k=n.toLowerCase(); if(!seen.has(k)){ seen.add(k); unique.push(n); } });
+  bulkRows = unique.map(n => ({ name:n, url: buildLink(n) }));
+  renderBulk();
+});
+function renderBulk(){
+  const wrap = $("#bulkTableWrap");
+  if(!bulkRows.length){ wrap.innerHTML=""; $("#bulkCount").textContent=""; $("#copyAll").style.display="none"; $("#downloadCsv").style.display="none"; return; }
+  wrap.innerHTML = '<table><thead><tr><th>Agent</th><th>Link</th><th></th></tr></thead><tbody>'
+    + bulkRows.map((r,i)=>'<tr><td>'+esc(r.name)+'</td><td class="url">'+esc(r.url)
+      + '</td><td class="act"><button class="btn btn-ghost btn-sm" data-i="'+i+'" type="button">Copy</button></td></tr>').join("")
+    + '</tbody></table>';
+  wrap.querySelectorAll("button[data-i]").forEach(b=>b.addEventListener("click", ()=>copy(bulkRows[+b.dataset.i].url)));
+  const team = $("#company").value.trim();
+  $("#bulkCount").textContent = bulkRows.length + " link" + (bulkRows.length===1?"":"s") + (team?(" · "+team):"");
+  $("#copyAll").style.display = ""; $("#downloadCsv").style.display = "";
+}
+$("#copyAll").addEventListener("click", ()=> copy(bulkRows.map(r=>r.url).join("\n")) );
+$("#downloadCsv").addEventListener("click", ()=>{
+  const rows = [["Agent","Company","Link"]].concat(bulkRows.map(r=>[r.name, $("#company").value.trim(), r.url]));
+  const csv = rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(",")).join("\r\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  const team=($("#company").value.trim()||"team").replace(/[^\w-]+/g,"-").toLowerCase();
+  a.download="billcompare-links-"+team+".csv"; a.click();
+});
+// regenerate bulk links live if team fields change after generating
+["company","sh_id","sh_campaign","manager"].forEach(id=>$("#"+id).addEventListener("input", ()=>{
+  if(bulkRows.length){ bulkRows = bulkRows.map(r=>({name:r.name, url:buildLink(r.name)})); renderBulk(); }
+}));
+
+renderSingle();
+</script>
+</body>
+</html>

@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BillCompare — Lead Capture</title>
+<style>
+  /* ----------  CONFIG NOTE  ----------
+     Visual + behavioural settings live in the CONFIG object in the <script> at
+     the bottom of this file. The values you MUST set before go-live are flagged
+     there with REPLACE_ME and the form will warn you on screen until you do.
+     ----------------------------------- */
+
+  :root{
+    --ink:#16241f;          /* near-black green-tinted text */
+    --ink-soft:#52615b;
+    --line:#dfe5e1;
+    --bg:#f3f6f3;
+    --card:#ffffff;
+    --brand:#0f7a4d;        /* SPGE-style energy green */
+    --brand-dark:#0a5c3a;
+    --brand-tint:#e7f3ec;
+    --ok:#0f7a4d;
+    --ok-tint:#e7f3ec;
+    --warn:#9a6300;
+    --warn-tint:#fbf1dd;
+    --err:#b5261e;
+    --err-tint:#fbe7e6;
+    --focus:#1565ff;
+    --radius:12px;
+    --shadow:0 1px 2px rgba(16,40,30,.04),0 6px 20px rgba(16,40,30,.05);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    color:var(--ink); background:var(--bg);
+    font-size:16px; line-height:1.45; -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---- top bar ---- */
+  .topbar{
+    position:sticky; top:0; z-index:20;
+    background:rgba(255,255,255,.92); backdrop-filter:saturate(1.4) blur(8px);
+    color:var(--ink); border-bottom:1px solid var(--line);
+    display:flex; align-items:center; gap:16px 20px; flex-wrap:wrap;
+    padding:12px 24px;
+  }
+  .brand-logo{height:30px; width:auto; display:block}
+  .brand-word{font-weight:700; font-size:19px; color:var(--brand-dark); letter-spacing:-.2px}
+  .topbar .spacer{flex:1}
+  .topbar-meta{display:flex; align-items:center; gap:10px 18px; flex-wrap:wrap; margin-left:auto}
+  .rep{
+    display:flex; align-items:center; gap:8px; font-size:13.5px; color:var(--ink-soft);
+    background:var(--brand-tint); padding:5px 12px; border-radius:999px;
+  }
+  .rep b{font-weight:600; color:var(--brand-dark)}
+  .counter{font-size:13px; color:var(--ink-soft)}
+  .counter b{font-size:15px; color:var(--ink)}
+  .team{font-size:13px; color:var(--ink-soft)}
+  .team b{font-weight:600; color:var(--ink)}
+
+  /* ---- layout ---- */
+  .wrap{max-width:1080px; margin:0 auto; padding:22px 20px 60px;
+        display:grid; grid-template-columns:minmax(0,1.55fr) minmax(0,1fr); gap:22px}
+  @media (max-width:880px){ .wrap{grid-template-columns:1fr} }
+
+  .card{background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow)}
+  .card h2{font-size:12px; letter-spacing:.8px; text-transform:uppercase; color:var(--ink-soft);
+           margin:0; padding:18px 24px 0}
+
+  /* ---- form ---- */
+  form{padding:8px 24px 24px}
+  fieldset{border:0; margin:0; padding:16px 0; border-bottom:1px solid var(--line)}
+  fieldset:last-of-type{border-bottom:0}
+  legend{font-size:12px; font-weight:700; letter-spacing:.5px; text-transform:uppercase;
+         color:var(--brand-dark); padding:0; margin-bottom:12px}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:14px 16px}
+  .grid .full{grid-column:1 / -1}
+  @media (max-width:560px){ .grid{grid-template-columns:1fr} .grid .full{grid-column:auto} }
+
+  label{display:block; font-size:13px; font-weight:600; margin-bottom:5px}
+  label .req{color:var(--err); font-weight:700}
+  label .hint{font-weight:400; color:var(--ink-soft)}
+  input,select{
+    width:100%; font:inherit; color:var(--ink);
+    padding:11px 13px; border:1.5px solid var(--line); border-radius:9px; background:#fff;
+    transition:border-color .12s;
+  }
+  input:hover,select:hover{border-color:#c9d2cc}
+  input:focus,select:focus{outline:3px solid color-mix(in srgb,var(--focus) 32%,transparent); outline-offset:0; border-color:var(--focus)}
+  .field.invalid input,.field.invalid select{border-color:var(--err); background:#fff7f6}
+  .err-msg{color:var(--err); font-size:12px; margin-top:4px; display:none}
+  .field.invalid .err-msg{display:block}
+
+  .consent{display:flex; gap:12px; align-items:flex-start; background:var(--warn-tint);
+           border:1.5px solid #f0dcae; border-radius:8px; padding:12px 14px}
+  .consent input{width:20px; height:20px; margin-top:2px; flex:0 0 auto}
+  .consent label{margin:0; font-weight:500; font-size:13.5px}
+  .consent.invalid{border-color:var(--err); background:var(--err-tint)}
+
+  .actions{display:flex; gap:12px; align-items:center; padding-top:16px}
+  .btn{font:inherit; font-weight:600; border-radius:8px; cursor:pointer; border:1.5px solid transparent; padding:12px 22px}
+  .btn-primary{background:var(--brand); color:#fff}
+  .btn-primary:hover{background:var(--brand-dark)}
+  .btn-primary:disabled{opacity:.55; cursor:not-allowed}
+  .btn-ghost{background:#fff; border-color:var(--line); color:var(--ink-soft)}
+  .btn-ghost:hover{border-color:var(--ink-soft)}
+  .spin{display:none; width:16px; height:16px; border:2.5px solid rgba(255,255,255,.4);
+        border-top-color:#fff; border-radius:50%; animation:sp .7s linear infinite; vertical-align:-3px; margin-right:8px}
+  .sending .spin{display:inline-block}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){ .spin{animation:none} }
+
+  /* ---- result banner ---- */
+  .result{display:none; margin:14px 24px 0; padding:14px 16px; border-radius:10px; font-size:14.5px}
+  .result.show{display:block}
+  .result.ok{background:var(--ok-tint); border:1.5px solid #b4ddc6; color:var(--brand-dark)}
+  .result.dup{background:var(--warn-tint); border:1.5px solid #f0dcae; color:var(--warn)}
+  .result.err{background:var(--err-tint); border:1.5px solid #f0bdb9; color:var(--err)}
+  .result.sent{background:#eef4fb; border:1.5px solid #bcd4ef; color:#1f5fa8}
+  .result b{display:block; margin-bottom:2px; font-size:15px}
+  .result code{font-size:12.5px; opacity:.8}
+
+  /* ---- log panel ---- */
+  .log-head{display:flex; align-items:center; gap:10px; padding:18px 22px 8px}
+  .log-head h2{padding:0; flex:1}
+  .log-head button{font-size:12px; border:1px solid var(--line); background:#fff; color:var(--ink-soft);
+                   padding:5px 10px; border-radius:7px; cursor:pointer}
+  .log-head button:hover{border-color:var(--ink-soft)}
+  .log-list{max-height:520px; overflow:auto; padding:0 8px 12px}
+  .log-row{display:grid; grid-template-columns:auto 1fr auto; gap:4px 10px; align-items:center;
+           padding:9px 10px; border-radius:8px}
+  .log-row + .log-row{border-top:1px solid var(--line)}
+  .pill{font-size:11px; font-weight:700; padding:2px 8px; border-radius:999px; white-space:nowrap}
+  .pill.ok{background:var(--ok-tint); color:var(--brand-dark)}
+  .pill.dup{background:var(--warn-tint); color:var(--warn)}
+  .pill.err{background:var(--err-tint); color:var(--err)}
+  .pill.sent{background:#eef4fb; color:#1f5fa8}
+  .log-name{font-weight:600; font-size:14px}
+  .log-sub{grid-column:2 / -1; font-size:12px; color:var(--ink-soft)}
+  .log-time{font-size:12px; color:var(--ink-soft); text-align:right}
+  .log-empty{padding:24px 18px; color:var(--ink-soft); font-size:14px; text-align:center}
+
+  /* ---- config warning ---- */
+  .config-warn{display:none; background:var(--err-tint); border-bottom:1.5px solid #f0bdb9;
+               color:var(--err); padding:10px 20px; font-size:13.5px}
+  .config-warn.show{display:block}
+
+  /* ---- incomplete-link notice ---- */
+  .link-bad{position:fixed; inset:0; background:linear-gradient(160deg,#0a5c3a,#0f7a4d);
+            display:none; align-items:center; justify-content:center; z-index:60; padding:20px}
+  .link-bad.show{display:flex}
+  .link-bad-card{background:#fff; border-radius:16px; padding:28px; width:100%; max-width:420px;
+                 box-shadow:0 30px 80px rgba(0,0,0,.35)}
+  .link-bad-card h3{margin:14px 0 6px; font-size:19px}
+  .link-bad-card p{color:var(--ink-soft); font-size:14px; margin:0}
+  .login-brand{font-size:22px; font-weight:700; color:var(--ink)}
+</style>
+</head>
+<body>
+
+  <div class="topbar">
+    <img class="brand-logo" src="https://www.billcompare.co.uk/assets/img/logo.png" alt="BillCompare" onerror="this.outerHTML='<span class=&quot;brand-word&quot;>BillCompare</span>'">
+    <div class="topbar-meta">
+      <div class="counter">Submitted today: <b id="dayCount">0</b></div>
+      <div class="team" style="display:none">Team: <b id="teamLabel">—</b></div>
+      <div class="rep">Agent: <b id="repLabel">—</b></div>
+    </div>
+  </div>
+
+  <div class="config-warn" id="configWarn"></div>
+
+  <div class="wrap">
+    <!-- ============ FORM ============ -->
+    <div class="card">
+      <h2>New lead</h2>
+      <div class="result" id="result" role="status" aria-live="polite"></div>
+      <form id="leadForm" novalidate>
+
+        <fieldset>
+          <legend>Customer</legend>
+          <div class="grid">
+            <div class="field">
+              <label for="title">Title</label>
+              <select id="title" name="title">
+                <option value="">—</option>
+                <option>Mr</option><option>Mrs</option><option>Ms</option>
+                <option>Miss</option><option>Dr</option><option>Mx</option>
+              </select>
+            </div>
+            <div class="field"></div>
+            <div class="field">
+              <label for="firstname">First name <span class="req">*</span></label>
+              <input id="firstname" name="firstname" autocomplete="off" required>
+              <div class="err-msg">Enter the first name.</div>
+            </div>
+            <div class="field">
+              <label for="lastname">Last name <span class="req">*</span></label>
+              <input id="lastname" name="lastname" autocomplete="off" required>
+              <div class="err-msg">Enter the last name.</div>
+            </div>
+            <div class="field full">
+              <label for="phone1">Phone <span class="req">*</span> <span class="hint">— UK mobile or landline</span></label>
+              <input id="phone1" name="phone1" inputmode="tel" autocomplete="off" required>
+              <div class="err-msg">Enter a valid UK phone number.</div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Address</legend>
+          <div class="grid">
+            <div class="field full">
+              <label for="street1">Address line 1 <span class="req">*</span></label>
+              <input id="street1" name="street1" autocomplete="off" required>
+              <div class="err-msg">Enter the first address line.</div>
+            </div>
+            <div class="field full">
+              <label for="street2">Address line 2 <span class="hint">— optional</span></label>
+              <input id="street2" name="street2" autocomplete="off">
+            </div>
+            <div class="field">
+              <label for="towncity">Town / city <span class="req">*</span></label>
+              <input id="towncity" name="towncity" autocomplete="off" required>
+              <div class="err-msg">Enter the town or city.</div>
+            </div>
+            <div class="field">
+              <label for="postcode">Postcode <span class="req">*</span></label>
+              <input id="postcode" name="postcode" autocomplete="off" autocapitalize="characters" required>
+              <div class="err-msg">Enter a valid UK postcode.</div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Energy details</legend>
+          <div class="grid">
+            <div class="field">
+              <label for="current_supplier">Current supplier <span class="req">*</span></label>
+              <select id="current_supplier" name="current_supplier" required>
+                <option value="">— Select —</option>
+                <option>British Gas</option>
+                <option>EDF Energy</option>
+                <option>E.ON Next</option>
+                <option>Octopus Energy</option>
+                <option>OVO Energy</option>
+                <option>Scottish Power</option>
+                <option>SSE</option>
+                <option>Shell Energy</option>
+                <option>So Energy</option>
+                <option>Utilita</option>
+                <option>Utility Warehouse</option>
+                <option>Good Energy</option>
+                <option>Other</option>
+              </select>
+              <div class="err-msg">Select the current supplier.</div>
+            </div>
+            <div class="field" id="supplierOtherWrap" style="display:none">
+              <label for="supplier_other">Supplier name <span class="req">*</span></label>
+              <input id="supplier_other" autocomplete="off">
+              <div class="err-msg">Enter the supplier name.</div>
+            </div>
+            <div class="field">
+              <label for="payment_method">Payment method <span class="req">*</span></label>
+              <select id="payment_method" name="payment_method" required>
+                <option value="">— Select —</option>
+                <option>Monthly Direct Debit</option>
+                <option>Quarterly Direct Debit</option>
+                <option>Prepayment</option>
+                <option>Pay on Receipt</option>
+              </select>
+              <div class="err-msg">Select the payment method.</div>
+            </div>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Consent</legend>
+          <div class="consent" id="consentBox">
+            <input type="checkbox" id="optin" name="optin">
+            <label for="optin">The customer has given consent to be contacted about energy switching and for their details to be shared for this purpose.</label>
+          </div>
+        </fieldset>
+
+        <div class="actions">
+          <button type="submit" class="btn btn-primary" id="submitBtn"><span class="spin"></span>Submit lead</button>
+          <button type="button" class="btn btn-ghost" id="clearBtn">Clear</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ============ LOG ============ -->
+    <div class="card">
+      <div class="log-head">
+        <h2>Today's submissions</h2>
+        <button id="exportBtn" type="button">Export CSV</button>
+        <button id="clearLogBtn" type="button">Clear</button>
+      </div>
+      <div class="log-list" id="logList"><div class="log-empty">No leads submitted yet today.</div></div>
+    </div>
+  </div>
+
+  <!-- shown only when the link is missing its agent code -->
+  <div class="link-bad" id="linkBad">
+    <div class="link-bad-card">
+      <img class="brand-logo" src="https://www.billcompare.co.uk/assets/img/logo.png" alt="BillCompare" style="height:34px;margin-bottom:6px">
+      <h3>This link isn't set up for you</h3>
+      <p>It's missing your personal agent code, so leads can't be submitted from it. Ask your team leader for your own BillCompare link and open that instead.</p>
+    </div>
+  </div>
+
+<script>
+/* ============================================================
+   CONFIG  —  set these before go-live
+   ============================================================ */
+const CONFIG = {
+  // The LeadByte endpoint and campaign. These are correct for BILLCOMPARE2.
+  endpoint:    "https://interactive.leadbyte.co.uk/api/submit.php",
+  campid:      "BILLCOMPARE2",
+
+  // OPTIONAL proxy: if direct posting is blocked by CORS (see notes), put your
+  // proxy URL here, e.g. "https://yourdomain.co.uk/lb-proxy.php". Leave blank
+  // to post straight to LeadByte.
+  proxyUrl:    "",
+
+  // ----- values that go on EVERY lead. REPLACE_ME ones must be filled in. -----
+  sh_id:        "REPLACE_ME",      // source / sales-house ID LeadByte expects
+  sh_campaign:  "REPLACE_ME",      // sales-house campaign reference
+  company_name: "REPLACE_ME",      // your contact centre / company name
+  manager_name: "REPLACE_ME",      // manager — sent to both managername & manager_name
+
+  // value posted as optin when the consent box is ticked
+  optinValue:  "Yes"
+};
+/* ============================================================ */
+
+const $ = s => document.querySelector(s);
+const LS_LOG = "bc_log";
+
+/* ---- URL overrides ----
+   Values can be passed in the page URL and take precedence over CONFIG, so one
+   hosted form can be handed to different teams/agents via different links, e.g.
+     ?repname=Jane%20Smith&companyname=LikeMinds   (per-agent link)
+     ?companyname=LikeMinds                        (per-team link; agent signs in)
+   Also accepts sh_id, sh_campaign and manager for teams that differ on those. */
+const URLP = new URLSearchParams(location.search);
+function urlVal(){ for(const k of arguments){ const v = URLP.get(k); if(v!==null && v.trim()!=="") return v.trim(); } return null; }
+const OVERRIDES = {
+  repname:      urlVal("repname","rep"),
+  company_name: urlVal("companyname","company_name","company"),
+  sh_id:        urlVal("sh_id"),
+  sh_campaign:  urlVal("sh_campaign"),
+  manager_name: urlVal("managername","manager_name","manager")
+};
+const cfg = k => OVERRIDES[k] || CONFIG[k];   // URL value wins, else CONFIG
+
+/* ---- config sanity check (URL overrides count as satisfied) ---- */
+(function(){
+  const missing = Object.entries({sh_id:cfg("sh_id"), sh_campaign:cfg("sh_campaign"),
+    company_name:cfg("company_name"), manager_name:cfg("manager_name")})
+    .filter(([k,v]) => !v || v === "REPLACE_ME").map(([k]) => k);
+  if(missing.length){
+    const w = $("#configWarn");
+    w.textContent = "Setup needed: set " + missing.join(", ") + " — either in the CONFIG block in this file or via the URL — before using this with live leads.";
+    w.classList.add("show");
+  }
+})();
+
+/* ---- agent identity comes entirely from the URL ----
+   repname is coded into the link (?repname=...). No sign-in. If it's missing,
+   the form can't attribute leads, so submission is blocked. */
+function getRep(){ return OVERRIDES.repname || ""; }
+const HAS_REP = !!getRep();
+
+/* ---- validation helpers ---- */
+const ukPostcode = /^[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}$/i;
+const ukPhone = v => { const d = v.replace(/\D/g,""); return /^(07\d{9}|0[12389]\d{8,9})$/.test(d); };
+
+function markField(el, ok){
+  const f = el.closest(".field");
+  if(f) f.classList.toggle("invalid", !ok);
+  return ok;
+}
+function validate(){
+  let ok = true;
+  ok &= markField($("#firstname"), $("#firstname").value.trim().length>0);
+  ok &= markField($("#lastname"),  $("#lastname").value.trim().length>0);
+  ok &= markField($("#phone1"),    ukPhone($("#phone1").value));
+  ok &= markField($("#street1"),   $("#street1").value.trim().length>0);
+  ok &= markField($("#towncity"),  $("#towncity").value.trim().length>0);
+  ok &= markField($("#postcode"),  ukPostcode($("#postcode").value.trim()));
+  ok &= markField($("#current_supplier"), $("#current_supplier").value!=="");
+  ok &= markField($("#payment_method"),   $("#payment_method").value!=="");
+  if($("#current_supplier").value==="Other")
+    ok &= markField($("#supplier_other"), $("#supplier_other").value.trim().length>0);
+  const consentOk = $("#optin").checked;
+  $("#consentBox").classList.toggle("invalid", !consentOk);
+  ok = ok && consentOk;
+  return !!ok;
+}
+// live-clear errors as the advisor fixes them
+$("#leadForm").addEventListener("input", e=>{
+  const f = e.target.closest(".field"); if(f && f.classList.contains("invalid")) validate();
+});
+$("#optin").addEventListener("change", ()=> $("#consentBox").classList.toggle("invalid", !$("#optin").checked));
+
+$("#current_supplier").addEventListener("change", e=>{
+  $("#supplierOtherWrap").style.display = e.target.value==="Other" ? "" : "none";
+});
+$("#postcode").addEventListener("blur", e=>{ e.target.value = e.target.value.toUpperCase().trim(); });
+
+/* ---- result banner ---- */
+function showResult(kind, title, detail){
+  const r = $("#result");
+  r.className = "result show " + kind;
+  r.innerHTML = "<b>"+title+"</b>" + (detail ? "<code>"+detail+"</code>" : "");
+  r.scrollIntoView({behavior:"smooth", block:"nearest"});
+}
+
+/* ---- submission log (localStorage) ---- */
+function loadLog(){ try{ return JSON.parse(localStorage.getItem(LS_LOG)||"[]"); }catch{ return []; } }
+function todayKey(){ return new Date().toISOString().slice(0,10); }
+function saveLogEntry(entry){
+  const log = loadLog(); log.unshift(entry);
+  localStorage.setItem(LS_LOG, JSON.stringify(log.slice(0,500)));
+  renderLog();
+}
+function renderLog(){
+  const log = loadLog().filter(e=>e.date===todayKey());
+  $("#dayCount").textContent = log.filter(e=>e.kind==="ok"||e.kind==="sent").length;
+  const list = $("#logList");
+  if(!log.length){ list.innerHTML = '<div class="log-empty">No leads submitted yet today.</div>'; return; }
+  list.innerHTML = log.map(e=>`
+    <div class="log-row">
+      <span class="pill ${e.kind}">${e.label}</span>
+      <span class="log-name">${esc(e.name)}</span>
+      <span class="log-time">${e.time}</span>
+      <span class="log-sub">${esc(e.phone)} · ${esc(e.postcode)}${e.msg?" · "+esc(e.msg):""}</span>
+    </div>`).join("");
+}
+function esc(s){ return (s||"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+$("#clearLogBtn").addEventListener("click", ()=>{
+  if(confirm("Clear today's submission list from this device? This does not affect leads already sent to LeadByte.")){
+    localStorage.removeItem(LS_LOG); renderLog();
+  }
+});
+$("#exportBtn").addEventListener("click", ()=>{
+  const log = loadLog().filter(e=>e.date===todayKey());
+  if(!log.length){ alert("Nothing to export yet."); return; }
+  const rows = [["Time","Result","Name","Phone","Postcode","Message"]]
+    .concat(log.map(e=>[e.time,e.label,e.name,e.phone,e.postcode,e.msg||""]));
+  const csv = rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(",")).join("\r\n");
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download = "billcompare-"+todayKey()+".csv"; a.click();
+});
+
+/* ---- build params & submit ---- */
+function buildParams(){
+  const supplier = $("#current_supplier").value==="Other"
+    ? $("#supplier_other").value.trim() : $("#current_supplier").value;
+  return {
+    campid:         CONFIG.campid,
+    returnjson:     "yes",
+    title:          $("#title").value,
+    firstname:      $("#firstname").value.trim(),
+    lastname:       $("#lastname").value.trim(),
+    street1:        $("#street1").value.trim(),
+    street2:        $("#street2").value.trim(),
+    towncity:       $("#towncity").value.trim(),
+    postcode:       $("#postcode").value.trim().toUpperCase(),
+    phone1:         $("#phone1").value.replace(/\s+/g,""),
+    payment_method: $("#payment_method").value,
+    current_supplier: supplier,
+    repname:        getRep(),
+    sh_id:          cfg("sh_id"),
+    sh_campaign:    cfg("sh_campaign"),
+    company_name:   cfg("company_name"),
+    managername:    cfg("manager_name"),
+    manager_name:   cfg("manager_name"),
+    optin:          CONFIG.optinValue
+  };
+}
+
+// interpret LeadByte's JSON response defensively
+function interpret(data){
+  let r = (data && (data.result || data.status || data.response || "")).toString().toLowerCase();
+  const msg = data && (data.message || data.msg || data.reason || data.error || "");
+  if(/dup/.test(r) || /dup/i.test(msg)) return {kind:"dup", label:"Duplicate", title:"Duplicate lead", msg};
+  if(r==="success" || data.success===true || (data.leadid && !/(reject|error|fail)/.test(r)))
+    return {kind:"ok", label:"Accepted", title:"Lead accepted", msg: data.leadid?("Lead ID "+data.leadid):msg};
+  if(/reject|error|fail|invalid/.test(r)) return {kind:"err", label:"Rejected", title:"Lead rejected", msg};
+  // fallback if shape is unfamiliar
+  return {kind: data.leadid?"ok":"err", label: data.leadid?"Accepted":"Check", title: data.leadid?"Lead accepted":"Submitted — check response", msg: msg || JSON.stringify(data).slice(0,140)};
+}
+
+async function submitLead(params){
+  const qs = new URLSearchParams(params).toString();
+  const url = (CONFIG.proxyUrl || CONFIG.endpoint) + "?" + qs;
+  const res = await fetch(url, {method:"GET"});
+  const text = await res.text();
+  try { return interpret(JSON.parse(text)); }
+  catch { return {kind: /success|leadid/i.test(text)?"ok":"err",
+                  label: /success|leadid/i.test(text)?"Accepted":"Check",
+                  title: "Submitted", msg: text.slice(0,140)}; }
+}
+
+// HTML-only fallback: submit through a hidden iframe. A real form navigation
+// isn't subject to CORS, so the lead reaches LeadByte even when fetch is blocked.
+// The trade-off: the response is cross-origin, so we can't read it — we know the
+// lead was sent, but not whether it was new or a duplicate.
+function submitViaIframe(params){
+  return new Promise(resolve=>{
+    let iframe = document.getElementById("lb_sink");
+    if(!iframe){
+      iframe = document.createElement("iframe");
+      iframe.name = "lb_sink"; iframe.id = "lb_sink"; iframe.style.display = "none";
+      document.body.appendChild(iframe);
+    }
+    const form = document.createElement("form");
+    form.method = "GET"; form.action = CONFIG.endpoint; form.target = "lb_sink";
+    Object.entries(params).forEach(([k,v])=>{
+      const inp = document.createElement("input");
+      inp.type = "hidden"; inp.name = k; inp.value = v; form.appendChild(inp);
+    });
+    document.body.appendChild(form);
+    let done = false;
+    const finish = ()=>{ if(done) return; done = true; try{ form.remove(); }catch(e){} resolve(); };
+    iframe.onload = finish;
+    setTimeout(finish, 2500);   // resolve even if onload doesn't fire
+    form.submit();
+  });
+}
+
+$("#leadForm").addEventListener("submit", async e=>{
+  e.preventDefault();
+  if(!getRep()){ showResult("err","This link isn't set up for you","It's missing your agent code, so leads can't be submitted. Ask your team leader for your own BillCompare link."); return; }
+  if(!validate()){ showResult("err","Some fields need attention","Check the highlighted fields and try again."); return; }
+
+  const params = buildParams();
+
+  // session-level duplicate guard
+  const dupe = loadLog().find(x=>x.date===todayKey() && (x.kind==="ok"||x.kind==="sent") && x.phone===params.phone1);
+  if(dupe && !confirm("You already submitted "+params.phone1+" today (accepted at "+dupe.time+"). Send again anyway?")) return;
+
+  const btn = $("#submitBtn");
+  btn.disabled = true; btn.classList.add("sending");
+  try{
+    let out;
+    try{
+      out = await submitLead(params);                 // normal path: reads the result
+    }catch(netErr){
+      await submitViaIframe(params);                  // CORS/blocked: still deliver the lead
+      out = {kind:"sent", label:"Sent", title:"Lead sent",
+             msg:"Delivered to LeadByte. This connection can't read the confirmation, so it isn't shown as accepted or duplicate here."};
+    }
+    showResult(out.kind, out.title, out.msg);
+    saveLogEntry({
+      date:todayKey(), time:new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}),
+      kind:out.kind, label:out.label,
+      name:(params.title?params.title+" ":"")+params.firstname+" "+params.lastname,
+      phone:params.phone1, postcode:params.postcode, msg:out.msg||""
+    });
+    if(out.kind==="ok" || out.kind==="sent"){ resetForm(); }
+  }catch(err){
+    showResult("err","Couldn't send the lead",
+      "Something went wrong sending this lead. Check your internet connection and try again. Technical detail: "+err.message);
+  }finally{
+    btn.disabled = false; btn.classList.remove("sending");
+  }
+});
+
+function resetForm(){
+  ["title","firstname","lastname","street1","street2","towncity","postcode","phone1","current_supplier","payment_method","supplier_other"]
+    .forEach(id=>{ const el=$("#"+id); if(el) el.value=""; });
+  $("#optin").checked = false;
+  $("#supplierOtherWrap").style.display = "none";
+  document.querySelectorAll(".field.invalid").forEach(f=>f.classList.remove("invalid"));
+  $("#consentBox").classList.remove("invalid");
+  $("#firstname").focus();
+}
+$("#clearBtn").addEventListener("click", ()=>{ resetForm(); $("#result").classList.remove("show"); });
+
+/* ---- init ---- */
+// show the team/company in the top bar when it's known
+(function(){
+  const company = cfg("company_name");
+  const el = $("#teamLabel");
+  if(company && company !== "REPLACE_ME"){ el.textContent = company; el.parentElement.style.display = ""; }
+})();
+
+renderLog();
+
+if(HAS_REP){
+  // identity is coded into the link
+  $("#repLabel").textContent = getRep();
+} else {
+  // link is missing its agent code — block use and explain
+  $("#repLabel").textContent = "—";
+  $("#submitBtn").disabled = true;
+  $("#linkBad").classList.add("show");
+}
+</script>
+</body>
+</html>
