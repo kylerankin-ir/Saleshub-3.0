@@ -332,14 +332,14 @@ const CONFIG = {
   // to post straight to LeadByte.
   proxyUrl:    "",
 
-  // ----- values that go on EVERY lead. REPLACE_ME ones must be filled in. -----
-  sh_id:        "REPLACE_ME",      // source / sales-house ID LeadByte expects
-  sh_campaign:  "REPLACE_ME",      // sales-house campaign reference
-  company_name: "REPLACE_ME",      // your contact centre / company name
-  manager_name: "REPLACE_ME",      // manager — sent to both managername & manager_name
+  // ----- values that go on EVERY lead -----
+  sh_id:        "",                // per-lead unique — left blank for now, TBC
+  sh_campaign:  "billcompare2",    // fixed for this campaign
+  company_name: "",                // comes from each link's ?companyname=... (per team)
+  manager_name: "interactiveresults",  // sent to both managername & manager_name
 
   // value posted as optin when the consent box is ticked
-  optinValue:  "Yes"
+  optinValue:  "yes"
 };
 /* ============================================================ */
 
@@ -363,14 +363,16 @@ const OVERRIDES = {
 };
 const cfg = k => OVERRIDES[k] || CONFIG[k];   // URL value wins, else CONFIG
 
-/* ---- config sanity check (URL overrides count as satisfied) ---- */
+/* ---- config sanity check ----
+   sh_campaign, manager_name and optin are fixed in CONFIG. sh_id is deliberately
+   left blank for now. The only value that must arrive per link is companyname,
+   so that's the only thing worth warning about (and only when it's absent). */
 (function(){
-  const missing = Object.entries({sh_id:cfg("sh_id"), sh_campaign:cfg("sh_campaign"),
-    company_name:cfg("company_name"), manager_name:cfg("manager_name")})
+  const missing = Object.entries({company_name:cfg("company_name")})
     .filter(([k,v]) => !v || v === "REPLACE_ME").map(([k]) => k);
   if(missing.length){
     const w = $("#configWarn");
-    w.textContent = "Setup needed: set " + missing.join(", ") + " — either in the CONFIG block in this file or via the URL — before using this with live leads.";
+    w.textContent = "This link has no company/team on it (companyname). Generate the link from the link generator so the team is included.";
     w.classList.add("show");
   }
 })();
