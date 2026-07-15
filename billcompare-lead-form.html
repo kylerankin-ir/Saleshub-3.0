@@ -89,6 +89,17 @@
   }
   input:hover,select:hover{border-color:#c9d2cc}
   input:focus,select:focus{outline:3px solid color-mix(in srgb,var(--focus) 32%,transparent); outline-offset:0; border-color:var(--focus)}
+
+  .pc-row{display:flex; gap:8px}
+  .pc-row input{flex:1}
+  .btn-find{white-space:nowrap; background:var(--brand); color:#fff; border:0; border-radius:9px;
+            font-weight:600; padding:0 16px; cursor:pointer}
+  .btn-find:hover{background:var(--brand-dark)}
+  .btn-find:disabled{opacity:.6; cursor:wait}
+  .lookup-msg{grid-column:1 / -1; font-size:13px; margin:-4px 0 2px}
+  .lookup-msg:empty{margin:0}
+  .lookup-msg.info{color:var(--ink-soft)}
+  .lookup-msg.err{color:var(--err)}
   .field.invalid input,.field.invalid select{border-color:var(--err); background:#fff7f6}
   .err-msg{color:var(--err); font-size:12px; margin-top:4px; display:none}
   .field.invalid .err-msg{display:block}
@@ -212,6 +223,19 @@
           <legend>Address</legend>
           <div class="grid">
             <div class="field full">
+              <label for="postcode">Postcode <span class="req">*</span> <span class="hint">— type it, then Find address</span></label>
+              <div class="pc-row">
+                <input id="postcode" name="postcode" autocomplete="off" autocapitalize="characters" required>
+                <button type="button" class="btn btn-find" id="findAddr">Find address</button>
+              </div>
+              <div class="err-msg">Enter a valid UK postcode.</div>
+            </div>
+            <div class="field full" id="addrPickWrap" style="display:none">
+              <label for="addrPick">Select address</label>
+              <select id="addrPick"><option value="">— Select address —</option></select>
+            </div>
+            <div class="lookup-msg full" id="lookupMsg"></div>
+            <div class="field full">
               <label for="street1">Address line 1 <span class="req">*</span></label>
               <input id="street1" name="street1" autocomplete="off" required>
               <div class="err-msg">Enter the first address line.</div>
@@ -220,15 +244,10 @@
               <label for="street2">Address line 2 <span class="hint">— optional</span></label>
               <input id="street2" name="street2" autocomplete="off">
             </div>
-            <div class="field">
+            <div class="field full">
               <label for="towncity">Town / city <span class="req">*</span></label>
               <input id="towncity" name="towncity" autocomplete="off" required>
               <div class="err-msg">Enter the town or city.</div>
-            </div>
-            <div class="field">
-              <label for="postcode">Postcode <span class="req">*</span></label>
-              <input id="postcode" name="postcode" autocomplete="off" autocapitalize="characters" required>
-              <div class="err-msg">Enter a valid UK postcode.</div>
             </div>
           </div>
         </fieldset>
@@ -332,6 +351,10 @@ const CONFIG = {
   // to post straight to LeadByte.
   proxyUrl:    "",
 
+  // Postcode -> address lookup. Points at your Cloudflare Worker, which holds
+  // the GoAddress token server-side (the token is never in this file).
+  addressLookupUrl: "https://goaddress-proxy.kyle-rankin.workers.dev/",
+
   // ----- values that go on EVERY lead -----
   sh_id:        "",                // per-lead unique — left blank for now, TBC
   sh_campaign:  "billcompare2",    // fixed for this campaign
@@ -419,6 +442,73 @@ $("#current_supplier").addEventListener("change", e=>{
   $("#supplierOtherWrap").style.display = e.target.value==="Other" ? "" : "none";
 });
 $("#postcode").addEventListener("blur", e=>{ e.target.value = e.target.value.toUpperCase().trim(); });
+
+/* ---- postcode -> address lookup (via the Cloudflare Worker) ---- */
+let ADDR_LIST = [];
+function hidePicker(){ $("#addrPickWrap").style.display = "none"; }
+function lookupMsg(kind, text){ const m = $("#lookupMsg"); m.className = "lookup-msg full " + kind; m.textContent = text; }
+
+// turn one GoAddress record into the form's line1 / line2 / town
+function mapAddress(a){
+  const flat     = (a.flat || "").toString().trim();
+  const building = (a.building_name || "").trim();
+  const org      = (a.organisation || "").trim();
+  const houseNo  = (a.houseNo || "").toString().trim();
+  const street   = (a.street || "").trim();
+  const streetLine = [houseNo, street].filter(Boolean).join(" ");
+  const premises   = [org, building, flat].filter(Boolean).join(", ");
+  let line1, line2;
+  if(premises){ line1 = premises; line2 = streetLine; }
+  else        { line1 = streetLine; line2 = ""; }
+  if(!line1) line1 = (a.raw_address || a.address || "").trim();
+  return {
+    line1, line2,
+    town: (a.post_town || a.city || a.town || "").trim(),
+    postcode: (a.postcode || "").trim()
+  };
+}
+
+async function findAddress(){
+  const pc = $("#postcode").value.trim();
+  if(!ukPostcode.test(pc)){ markField($("#postcode"), false); lookupMsg("err","Enter a valid postcode first."); return; }
+  markField($("#postcode"), true);
+  const btn = $("#findAddr");
+  btn.disabled = true; lookupMsg("info","Searching…"); hidePicker();
+  try{
+    const res  = await fetch(CONFIG.addressLookupUrl + "?q=" + encodeURIComponent(pc));
+    const data = await res.json();
+    const list = (data.new_address_res && data.new_address_res.length)
+      ? data.new_address_res
+      : (data.results || []).map(r => ({ raw_address:r.address, address:r.address, postcode:r.postcode }));
+    if(!list.length){ lookupMsg("err","No addresses found — enter it manually below."); return; }
+    ADDR_LIST = list;
+    const sel = $("#addrPick");
+    sel.innerHTML = '<option value="">— Select address —</option>' + list.map((a,i)=>{
+      const txt = a.raw_address || a.address || [a.houseNo,a.street].filter(Boolean).join(" ") || ("Address "+(i+1));
+      return '<option value="'+i+'">'+esc(txt)+'</option>';
+    }).join("");
+    $("#addrPickWrap").style.display = "";
+    lookupMsg("info", list.length + " address" + (list.length===1?"":"es") + " found — pick yours.");
+    sel.focus();
+  }catch(err){
+    lookupMsg("err","Lookup unavailable — enter the address manually below.");
+  }finally{
+    btn.disabled = false;
+  }
+}
+$("#findAddr").addEventListener("click", findAddress);
+$("#postcode").addEventListener("keydown", e=>{ if(e.key==="Enter"){ e.preventDefault(); findAddress(); } });
+$("#addrPick").addEventListener("change", e=>{
+  if(e.target.value==="") return;
+  const m = mapAddress(ADDR_LIST[+e.target.value]);
+  $("#street1").value = m.line1;
+  $("#street2").value = m.line2;
+  $("#towncity").value = m.town;
+  if(m.postcode) $("#postcode").value = m.postcode.toUpperCase();
+  ["street1","towncity","postcode"].forEach(id=>markField($("#"+id), true));
+  lookupMsg("", "");
+  $("#street1").focus();
+});
 
 /* ---- result banner ---- */
 function showResult(kind, title, detail){
@@ -592,6 +682,8 @@ function resetForm(){
     .forEach(id=>{ const el=$("#"+id); if(el) el.value=""; });
   $("#optin").checked = false;
   $("#supplierOtherWrap").style.display = "none";
+  hidePicker(); $("#addrPick").innerHTML = '<option value="">— Select address —</option>'; ADDR_LIST = [];
+  const lm = $("#lookupMsg"); lm.className = "lookup-msg full"; lm.textContent = "";
   document.querySelectorAll(".field.invalid").forEach(f=>f.classList.remove("invalid"));
   $("#consentBox").classList.remove("invalid");
   $("#firstname").focus();
