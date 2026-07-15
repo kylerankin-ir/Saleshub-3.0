@@ -536,7 +536,7 @@ function renderLog(){
       <span class="pill ${e.kind}">${e.label}</span>
       <span class="log-name">${esc(e.name)}</span>
       <span class="log-time">${e.time}</span>
-      <span class="log-sub">${esc(e.phone)} · ${esc(e.postcode)}${e.msg?" · "+esc(e.msg):""}</span>
+      <span class="log-sub">${esc(e.phone)} · ${esc(e.postcode)}${e.shid?" · "+esc(e.shid):""}${e.msg?" · "+esc(e.msg):""}</span>
     </div>`).join("");
 }
 function esc(s){ return (s||"").replace(/[&<>"]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
@@ -549,8 +549,8 @@ $("#clearLogBtn").addEventListener("click", ()=>{
 $("#exportBtn").addEventListener("click", ()=>{
   const log = loadLog().filter(e=>e.date===todayKey());
   if(!log.length){ alert("Nothing to export yet."); return; }
-  const rows = [["Time","Result","Name","Phone","Postcode","Message"]]
-    .concat(log.map(e=>[e.time,e.label,e.name,e.phone,e.postcode,e.msg||""]));
+  const rows = [["Time","Result","SH_ID","Name","Phone","Postcode","Message"]]
+    .concat(log.map(e=>[e.time,e.label,e.shid||"",e.name,e.phone,e.postcode,e.msg||""]));
   const csv = rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(",")).join("\r\n");
   const a = document.createElement("a");
   a.href = URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
@@ -558,6 +558,16 @@ $("#exportBtn").addEventListener("click", ()=>{
 });
 
 /* ---- build params & submit ---- */
+// Unique per-lead reference: SH + base36 timestamp + 4 random chars.
+// Collision-proof without a server, and alphanumeric so it can never clash
+// with older purely-numeric SH_IDs already in LeadByte.
+function genSHID(){
+  const chars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  let r = "";
+  for(let i=0;i<6;i++) r += chars[Math.floor(Math.random()*36)];
+  return "SH" + Date.now().toString(36).toUpperCase() + r;
+}
+
 function buildParams(){
   const supplier = $("#current_supplier").value==="Other"
     ? $("#supplier_other").value.trim() : $("#current_supplier").value;
@@ -575,7 +585,7 @@ function buildParams(){
     payment_method: $("#payment_method").value,
     current_supplier: supplier,
     repname:        getRep(),
-    sh_id:          cfg("sh_id"),
+    sh_id:          cfg("sh_id") || genSHID(),   // URL value wins, else generate a fresh unique ID
     sh_campaign:    cfg("sh_campaign"),
     company_name:   cfg("company_name"),
     managername:    cfg("manager_name"),
@@ -657,10 +667,11 @@ $("#leadForm").addEventListener("submit", async e=>{
       out = {kind:"sent", label:"Sent", title:"Lead sent",
              msg:"Delivered to LeadByte. This connection can't read the confirmation, so it isn't shown as accepted or duplicate here."};
     }
-    showResult(out.kind, out.title, out.msg);
+    const ref = "Ref " + params.sh_id;
+    showResult(out.kind, out.title, (out.msg ? out.msg + " · " : "") + ref);
     saveLogEntry({
       date:todayKey(), time:new Date().toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"}),
-      kind:out.kind, label:out.label,
+      kind:out.kind, label:out.label, shid:params.sh_id,
       name:(params.title?params.title+" ":"")+params.firstname+" "+params.lastname,
       phone:params.phone1, postcode:params.postcode, msg:out.msg||""
     });
